@@ -1,0 +1,11 @@
+--cpu Cortex-M0+
+".\objects\startup_mspm0g351x_uvision.o"
+".\objects\main.o"
+".\objects\app_menu.o"
+".\objects\bsp_input.o"
+".\objects\bsp_led.o"
+".\objects\ti_msp_dl_config.o"
+--ropi --strict --scatter "./mspm0g3519.sct"
+D:\ti\mspm0_sdk_2_10_00_04\source\ti\driverlib\lib\keil\m0p\mspm0gx51x\driverlib.a --summary_stderr --info summarysizes --map --load_addr_map_info --xref --callgraph --symbols
+--info sizes --info totals --info unused --info veneers
+--list ".\ethernet_tester.map" -o .\Objects\ethernet_tester.axf
