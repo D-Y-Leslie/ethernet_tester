@@ -3,7 +3,6 @@
 #include "ti/driverlib/dl_gpio.h"
 
 #define KEY_PORT            GPIOB
-
 #define KEY_LEFT_PIN        DL_GPIO_PIN_6
 #define KEY_DOWN_PIN        DL_GPIO_PIN_7
 #define KEY_RIGHT_PIN       DL_GPIO_PIN_8
@@ -20,8 +19,8 @@ typedef struct
     uint8_t filter_level;     /* 当前去抖观察电平 */
     uint8_t debounce_cnt;     /* 去抖计数 */
     uint16_t hold_cnt;        /* 稳定按下持续计数 */
-    uint8_t short_armed;      /* 1=允许下一次 short，稳定释放后重新武装 */
-    uint8_t long_sent;        /* 1=本次按下已发过 long */
+    uint8_t short_armed;      /* 释放后允许下一次 short */
+    uint8_t long_sent;        /* 本次按下已经发过 long */
 } BSP_KeyState_t;
 
 static BSP_KeyState_t g_keyState[BSP_KEY_MAX];
@@ -30,17 +29,25 @@ static BSP_InputEvent_t g_inputEvent;
 static uint8_t g_encPrevAB = 0U;
 static int8_t  g_encAcc = 0;
 
+static uint32_t BSP_Input_GetKeyPin(BSP_Key_t key)
+{
+    switch (key) {
+    case BSP_KEY_LEFT:  return KEY_LEFT_PIN;
+    case BSP_KEY_DOWN:  return KEY_DOWN_PIN;
+    case BSP_KEY_RIGHT: return KEY_RIGHT_PIN;
+    case BSP_KEY_UP:    return KEY_UP_PIN;
+    case BSP_KEY_MID:   return KEY_MID_PIN;
+    default:            return 0U;
+    }
+}
+
+/* 返回值：1=松开，0=按下 */
 static uint8_t BSP_Input_ReadKeyRaw(BSP_Key_t key)
 {
-    uint32_t pin = 0U;
+    uint32_t pin = BSP_Input_GetKeyPin(key);
 
-    switch (key) {
-    case BSP_KEY_LEFT:  pin = KEY_LEFT_PIN;  break;
-    case BSP_KEY_DOWN:  pin = KEY_DOWN_PIN;  break;
-    case BSP_KEY_RIGHT: pin = KEY_RIGHT_PIN; break;
-    case BSP_KEY_UP:    pin = KEY_UP_PIN;    break;
-    case BSP_KEY_MID:   pin = KEY_MID_PIN;   break;
-    default:            pin = 0U;            break;
+    if (pin == 0U) {
+        return 1U;
     }
 
     return (DL_GPIO_readPins(KEY_PORT, pin) != 0U) ? 1U : 0U;
@@ -54,7 +61,7 @@ static uint8_t BSP_Input_ReadEncAB(void)
     return (uint8_t)((a << 1) | b);
 }
 
-static void BSP_Input_ClearEvents(void)
+void BSP_Input_ClearAllEvents(void)
 {
     g_inputEvent.key_short_mask = 0U;
     g_inputEvent.key_long_mask  = 0U;
@@ -73,15 +80,13 @@ void BSP_Input_Init(void)
         g_keyState[i].debounce_cnt = 0U;
         g_keyState[i].hold_cnt     = 0U;
         g_keyState[i].long_sent    = 0U;
-
-        /* 只有在稳定松开时，才允许下一次按下触发 short */
         g_keyState[i].short_armed  = (raw != 0U) ? 1U : 0U;
     }
 
-    BSP_Input_ClearEvents();
+    BSP_Input_ClearAllEvents();
 
     g_encPrevAB = BSP_Input_ReadEncAB();
-    g_encAcc = 0;
+    g_encAcc    = 0;
 }
 
 static void BSP_Input_ScanOneKey(BSP_Key_t key)
@@ -102,12 +107,12 @@ static void BSP_Input_ScanOneKey(BSP_Key_t key)
         }
     }
 
-    /* 尚未稳定，不继续 */
+    /* 尚未达到稳定判定 */
     if (ks->debounce_cnt < BSP_KEY_DEBOUNCE_COUNT) {
         return;
     }
 
-    /* 发生稳定边沿 */
+    /* 稳定边沿 */
     if (ks->stable_level != ks->filter_level) {
         ks->stable_level = ks->filter_level;
 
@@ -117,14 +122,14 @@ static void BSP_Input_ScanOneKey(BSP_Key_t key)
             ks->long_sent = 0U;
 
             if (ks->short_armed != 0U) {
-                g_inputEvent.key_short_mask |= (1U << key);
+                g_inputEvent.key_short_mask |= (uint8_t)(1U << key);
                 ks->short_armed = 0U;
             }
         } else {
-            /* 稳定释放：重新武装下一次 short */
-            ks->hold_cnt     = 0U;
-            ks->long_sent    = 0U;
-            ks->short_armed  = 1U;
+            /* 稳定释放 */
+            ks->hold_cnt    = 0U;
+            ks->long_sent   = 0U;
+            ks->short_armed = 1U;
         }
 
         return;
@@ -138,7 +143,7 @@ static void BSP_Input_ScanOneKey(BSP_Key_t key)
 
         if ((ks->hold_cnt >= BSP_KEY_LONG_PRESS_COUNT) &&
             (ks->long_sent == 0U)) {
-            g_inputEvent.key_long_mask |= (1U << key);
+            g_inputEvent.key_long_mask |= (uint8_t)(1U << key);
             ks->long_sent = 1U;
         }
     }
@@ -192,7 +197,7 @@ static void BSP_Input_ScanEncoder(void)
 void BSP_Input_Scan(void)
 {
     BSP_Input_ScanKeys();
-    //BSP_Input_ScanEncoder();
+    BSP_Input_ScanEncoder();
 }
 
 bool BSP_Input_FetchEvents(BSP_InputEvent_t *event)
@@ -208,7 +213,6 @@ bool BSP_Input_FetchEvents(BSP_InputEvent_t *event)
     }
 
     *event = g_inputEvent;
-    BSP_Input_ClearEvents();
-
+    BSP_Input_ClearAllEvents();
     return true;
 }

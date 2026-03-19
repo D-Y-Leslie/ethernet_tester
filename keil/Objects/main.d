@@ -81,4 +81,4 @@
   D:\ti\mspm0_sdk_2_10_00_04\source\ti\driverlib\dl_wwdt.h \
   D:\ti\mspm0_sdk_2_10_00_04\source\ti\driverlib\m0p\dl_interrupt.h \
   D:\ti\mspm0_sdk_2_10_00_04\source\ti\driverlib\m0p\dl_systick.h \
-  ..\BSP\bsp_led.h ..\BSP\bsp_input.h
+  ..\BSP\bsp_led.h ..\BSP\bsp_input.h ..\Application\app_menu.h
