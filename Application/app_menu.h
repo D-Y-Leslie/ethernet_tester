@@ -34,4 +34,4 @@ APP_MenuState_t APP_Menu_GetState(void);
 }
 #endif
 
-#endif
+#endif /* APP_MENU_H */

@@ -8,8 +8,14 @@
 extern "C" {
 #endif
 
-#define BSP_KEY_DEBOUNCE_COUNT        3U
-#define BSP_KEY_LONG_PRESS_COUNT      100U   /* 100 * 5ms = 500ms */
+/* 主循环周期是 5ms */
+#define BSP_INPUT_SCAN_PERIOD_MS        5U
+
+/* 连续多少次采样一致，认为稳定 */
+#define BSP_KEY_DEBOUNCE_COUNT          4U      /* 3 * 5ms = 15ms */
+
+/* 长按门限 */
+#define BSP_KEY_LONG_PRESS_COUNT        120U    /* 100 * 5ms = 500ms */
 
 typedef enum
 {
@@ -29,7 +35,7 @@ typedef enum
 
 typedef struct
 {
-    uint8_t key_short_mask;   /* 按下后立即触发一次 */
+    uint8_t key_short_mask;   /* 稳定按下边沿触发一次 */
     uint8_t key_long_mask;    /* 长按触发一次 */
     int8_t  enc_delta;        /* >0 顺时针，<0 逆时针 */
 } BSP_InputEvent_t;
@@ -42,4 +48,4 @@ bool BSP_Input_FetchEvents(BSP_InputEvent_t *event);
 }
 #endif
 
-#endif
+#endif /* BSP_INPUT_H */

@@ -340,7 +340,7 @@
               <MiscControls></MiscControls>
               <Define>__MSPM0G3519__</Define>
               <Undefine></Undefine>
-              <IncludePath>../;../../../../../../source/third_party/CMSIS/Core/Include;../../../../../../source;..\Application;..\BSP;..\SysConfig;D:\ti\mspm0_sdk_2_10_00_04\source;D:\ti\mspm0_sdk_2_10_00_04\source\ti\devices;D:\ti\mspm0_sdk_2_10_00_04\source\ti\devices\msp;D:\ti\mspm0_sdk_2_10_00_04\source\ti\driverlib;D:\ti\mspm0_sdk_2_10_00_04\source\ti\driverlib\m0p;D:\ti\mspm0_sdk_2_10_00_04\source\third_party\CMSIS\Core\Include</IncludePath>
+              <IncludePath>..\Application;..\BSP;..\SysConfig;D:\ti\mspm0_sdk_2_10_00_04\source;D:\ti\mspm0_sdk_2_10_00_04\source\ti\devices;D:\ti\mspm0_sdk_2_10_00_04\source\ti\devices\msp;D:\ti\mspm0_sdk_2_10_00_04\source\ti\driverlib;D:\ti\mspm0_sdk_2_10_00_04\source\ti\driverlib\m0p;D:\ti\mspm0_sdk_2_10_00_04\source\third_party\CMSIS\Core\Include</IncludePath>
             </VariousControls>
           </Cads>
           <Aads>
