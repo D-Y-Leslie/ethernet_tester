@@ -1,6 +1,7 @@
 #include "app_debug.h"
 #include "ti_msp_dl_config.h"
 #include <stdio.h>
+#include <stdint.h>
 
 static void UART_SendChar(char ch)
 {

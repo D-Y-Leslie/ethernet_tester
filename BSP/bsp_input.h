@@ -8,7 +8,7 @@
 extern "C" {
 #endif
 
-/* 扫描周期：由主循环保证每 5ms 调一次 BSP_Input_Scan() */
+/* 主循环保证每 5ms 调一次 BSP_Input_Scan() */
 #define BSP_INPUT_SCAN_PERIOD_MS        5U
 
 /* 去抖时间 = 4 * 5ms = 20ms */

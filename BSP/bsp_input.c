@@ -15,11 +15,11 @@
 
 typedef struct
 {
-    uint8_t stable_level;     /* 当前稳定电平：1=松开，0=按下 */
-    uint8_t filter_level;     /* 当前去抖观察电平 */
+    uint8_t stable_level;     /* 1=松开, 0=按下 */
+    uint8_t filter_level;     /* 去抖观察电平 */
     uint8_t debounce_cnt;     /* 去抖计数 */
     uint16_t hold_cnt;        /* 稳定按下持续计数 */
-    uint8_t short_armed;      /* 释放后允许下一次 short */
+    uint8_t short_armed;      /* 释放后重新允许下一次 short */
     uint8_t long_sent;        /* 本次按下已经发过 long */
 } BSP_KeyState_t;
 
@@ -27,7 +27,7 @@ static BSP_KeyState_t g_keyState[BSP_KEY_MAX];
 static BSP_InputEvent_t g_inputEvent;
 
 static uint8_t g_encPrevAB = 0U;
-static int8_t  g_encAcc = 0;
+static int8_t  g_encAcc    = 0;
 
 static uint32_t BSP_Input_GetKeyPin(BSP_Key_t key)
 {
@@ -41,7 +41,7 @@ static uint32_t BSP_Input_GetKeyPin(BSP_Key_t key)
     }
 }
 
-/* 返回值：1=松开，0=按下 */
+/* 返回值: 1=松开, 0=按下 */
 static uint8_t BSP_Input_ReadKeyRaw(BSP_Key_t key)
 {
     uint32_t pin = BSP_Input_GetKeyPin(key);
@@ -107,12 +107,12 @@ static void BSP_Input_ScanOneKey(BSP_Key_t key)
         }
     }
 
-    /* 尚未达到稳定判定 */
+    /* 还没稳定 */
     if (ks->debounce_cnt < BSP_KEY_DEBOUNCE_COUNT) {
         return;
     }
 
-    /* 稳定边沿 */
+    /* 发生稳定边沿 */
     if (ks->stable_level != ks->filter_level) {
         ks->stable_level = ks->filter_level;
 

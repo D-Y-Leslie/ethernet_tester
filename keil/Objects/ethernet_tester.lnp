@@ -2,6 +2,7 @@
 ".\objects\startup_mspm0g351x_uvision.o"
 ".\objects\main.o"
 ".\objects\app_menu.o"
+".\objects\app_debug.o"
 ".\objects\bsp_input.o"
 ".\objects\bsp_led.o"
 ".\objects\ti_msp_dl_config.o"
