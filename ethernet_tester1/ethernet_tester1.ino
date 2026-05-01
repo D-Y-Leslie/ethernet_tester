@@ -53,12 +53,14 @@ void dcrPageReset();
 void typePageReset();
 void shortPageReset();
 void lengthPageReset();
+void poePageReset();
 
 void enterWirePage();
 void enterDcrPage();
 void enterTypePage();
 void enterShortPage();
 void enterLengthPage();
+void enterPoePage();
 
 void clearResults();
 void setupLinePins();
@@ -70,11 +72,18 @@ void runShortTest();
 void runLengthTest();
 void runLengthTestTcp();
 void runLengthTestUart();
+void runPoeTest();
 
 uint8_t scanStableMask(uint8_t driveIdx);
 bool quickCablePresent();
 bool readSdrTcpLine(WiFiClient& client, String& line, uint32_t timeoutMs);
 bool showLengthProtocolLine(const String& rawLine);
+float readPoeAdcVoltageV(uint8_t pin);
+float estimatePoeInputVoltageV(float adcV);
+const char* poeStatusText(float va);
+const char* poeModeText(float va);
+void poeShowTesting();
+void poeShowResult(float va, const String& vbText, const String& mode, const String& status);
 
 // ============================================================
 // 基本参数
@@ -152,6 +161,24 @@ static const float DCR_OFFSET_OHM = 0.25f;
 
 // ADC 平均采样次数
 static const uint16_t DCR_ADC_SAMPLES = 120;
+
+// ============================================================
+// PoE Mode A voltage detect parameters
+// ============================================================
+
+static const int PIN_POE_ADC_A = 2;
+static const bool POE_MODE_B_AVAILABLE = false;
+
+static const float POE_DIVIDER_RATIO = 20.6078f;
+static const float POE_BRIDGE_DROP_COMP_V = 1.2f;
+static const float POE_ADC_NOISE_FLOOR_V = 0.05f;
+
+static const float NO_POE_MAX_V = 5.0f;
+static const float POE_PRESENT_MIN_V = 30.0f;
+static const float POE_OVER_RANGE_V = 60.0f;
+
+static const uint16_t POE_ADC_SAMPLES = 120;
+static const uint16_t POE_ADC_SAMPLE_DELAY_US = 1000;
 
 // ============================================================
 // 防抖与扫描增强参数
@@ -249,6 +276,20 @@ static const char* LENGTH_T7 = "p_length.t7";
 static const char* LENGTH_T8 = "p_length.t8";
 static const char* LENGTH_T9 = "p_length.t9";
 
+// PoE page objects
+static const char* POE_T0 = "p_poe.t0";
+static const char* POE_T1 = "p_poe.t1";
+static const char* POE_T2 = "p_poe.t2";
+static const char* POE_T3 = "p_poe.t3";
+static const char* POE_T4 = "p_poe.t4";
+static const char* POE_T5 = "p_poe.t5";
+static const char* POE_T6 = "p_poe.t6";
+static const char* POE_T7 = "p_poe.t7";
+static const char* POE_T8 = "p_poe.t8";
+static const char* POE_T9 = "p_poe.t9";
+static const char* POE_T10 = "p_poe.t10";
+static const char* POE_T11 = "p_poe.t11";
+
 // MAIN 页面对象
 static const char* MAIN_T0 = "main.t0";
 static const char* MAIN_T1 = "main.t1";
@@ -298,7 +339,8 @@ enum UiPage : uint8_t {
   PAGE_DCR,
   PAGE_TYPE,
   PAGE_SHORT,
-  PAGE_LENGTH
+  PAGE_LENGTH,
+  PAGE_POE
 };
 
 UiPage currentPage = PAGE_MAIN;
@@ -309,6 +351,7 @@ bool dcrEnterFlag  = false;
 bool typeEnterFlag = false;
 bool shortEnterFlag = false;
 bool lengthEnterFlag = false;
+bool poeEnterFlag = false;
 bool backFlag      = false;
 
 // 启动事件
@@ -317,6 +360,7 @@ bool dcrStartFlag   = false;
 bool typeStartFlag  = false;
 bool shortStartFlag = false;
 bool lengthStartFlag = false;
+bool poeStartFlag = false;
 
 // 运行状态
 bool wireBusy = false;
@@ -324,6 +368,7 @@ bool dcrBusy  = false;
 bool typeBusy = false;
 bool shortBusy = false;
 bool lengthBusy = false;
+bool poeBusy = false;
 
 // 时间戳
 uint32_t lastStartEventMs     = 0;
@@ -331,6 +376,7 @@ uint32_t lastDcrStartEventMs  = 0;
 uint32_t lastTypeStartEventMs = 0;
 uint32_t lastShortStartEventMs = 0;
 uint32_t lastLengthStartEventMs = 0;
+uint32_t lastPoeStartEventMs = 0;
 
 // 串口接收字母流缓冲（更稳的事件解析）
 String tjcAsciiBuf;
@@ -438,6 +484,11 @@ void enterShortPage() {
 void enterLengthPage() {
   lengthPageReset();
   currentPage = PAGE_LENGTH;
+}
+
+void enterPoePage() {
+  poePageReset();
+  currentPage = PAGE_POE;
 }
 
 // ============================================================
@@ -1039,6 +1090,29 @@ void lengthPageReset() {
   tjcSetText(LENGTH_T9, "PRESS START");
 }
 
+void poePageReset() {
+  tjcPage("p_poe");
+  delay(60);
+
+  tjcSetText(POE_T0, "PoE Detect");
+  tjcSetText(POE_T1, "WAIT TEST");
+
+  tjcSetText(POE_T2, "PoE");
+  tjcSetText(POE_T3, "--");
+
+  tjcSetText(POE_T4, "MODE");
+  tjcSetText(POE_T5, "--");
+
+  tjcSetText(POE_T6, "VA");
+  tjcSetText(POE_T7, "-- V");
+
+  tjcSetText(POE_T8, "VB");
+  tjcSetText(POE_T9, "N/A");
+
+  tjcSetText(POE_T10, "STATUS");
+  tjcSetText(POE_T11, "--");
+}
+
 void typeShowTesting() {
   tjcSetText(TYPE_T1, "TESTING");
   tjcSetText(TYPE_T3, "...");
@@ -1518,6 +1592,107 @@ void runLengthTest() {
   lengthBusy = false;
 }
 
+float readPoeAdcVoltageV(uint8_t pin) {
+  uint32_t sumMv = 0;
+
+  for (uint16_t i = 0; i < POE_ADC_SAMPLES; i++) {
+    sumMv += analogReadMilliVolts(pin);
+    delayMicroseconds(POE_ADC_SAMPLE_DELAY_US);
+  }
+
+  return (float)sumMv / (float)POE_ADC_SAMPLES / 1000.0f;
+}
+
+float estimatePoeInputVoltageV(float adcV) {
+  if (adcV < POE_ADC_NOISE_FLOOR_V) {
+    return 0.0f;
+  }
+
+  return adcV * POE_DIVIDER_RATIO + POE_BRIDGE_DROP_COMP_V;
+}
+
+const char* poeStatusText(float va) {
+  if (va > POE_OVER_RANGE_V) {
+    return "OVER_RANGE";
+  }
+
+  if (va >= POE_PRESENT_MIN_V) {
+    return "OK";
+  }
+
+  if (va <= NO_POE_MAX_V) {
+    return "NO_POE";
+  }
+
+  return "UNSAFE";
+}
+
+const char* poeModeText(float va) {
+  if (va >= POE_PRESENT_MIN_V && va <= POE_OVER_RANGE_V) {
+    return "A";
+  }
+
+  return "UNKNOWN";
+}
+
+void poeShowTesting() {
+  tjcSetText(POE_T1, "TESTING");
+  tjcSetText(POE_T3, "--");
+  tjcSetText(POE_T5, "--");
+  tjcSetText(POE_T7, "-- V");
+  tjcSetText(POE_T9, POE_MODE_B_AVAILABLE ? "-- V" : "N/A");
+  tjcSetText(POE_T11, "--");
+}
+
+void poeShowResult(float va, const String& vbText, const String& mode, const String& status) {
+  if (status == "OK") {
+    tjcSetText(POE_T1, "TEST OK");
+    tjcSetText(POE_T3, "YES");
+  } else if (status == "NO_POE") {
+    tjcSetText(POE_T1, "TEST OK");
+    tjcSetText(POE_T3, "NO");
+  } else {
+    tjcSetText(POE_T1, "TEST FAIL");
+    tjcSetText(POE_T3, "--");
+  }
+
+  tjcSetText(POE_T5, mode);
+  tjcSetText(POE_T7, String(va, 1) + " V");
+  tjcSetText(POE_T9, vbText);
+  tjcSetText(POE_T11, status);
+}
+
+void runPoeTest() {
+  poeBusy = true;
+  poeStartFlag = false;
+
+  Serial.println("====================================");
+  Serial.println("PoE test start");
+
+  poeShowTesting();
+  delay(120);
+
+  float va = estimatePoeInputVoltageV(readPoeAdcVoltageV(PIN_POE_ADC_A));
+  String vbText = POE_MODE_B_AVAILABLE ? "-- V" : "N/A";
+  String status = poeStatusText(va);
+  String mode = poeModeText(va);
+
+  poeShowResult(va, vbText, mode, status);
+
+  Serial.print("POE_MAIN,VA=");
+  Serial.print(va, 2);
+  Serial.print(",VB=");
+  Serial.print(vbText);
+  Serial.print(",mode=");
+  Serial.print(mode);
+  Serial.print(",status=");
+  Serial.println(status);
+  Serial.println("PoE test end");
+  Serial.println("====================================");
+
+  poeBusy = false;
+}
+
 void evaluateMask(uint8_t idx, uint8_t mask) {
   LineResult& r = gResults[idx];
   r.state = ST_IDLE;
@@ -1606,6 +1781,13 @@ void processAsciiTokenBuffer() {
     return;
   }
 
+  if (tjcAsciiBuf.endsWith("poeenter")) {
+    poeEnterFlag = true;
+    tjcAsciiBuf = "";
+    Serial.println("[EVENT] poeenter");
+    return;
+  }
+
   if (tjcAsciiBuf.endsWith("dcrstart")) {
     if (!dcrBusy && (now - lastDcrStartEventMs >= START_DEBOUNCE_MS)) {
       dcrStartFlag = true;
@@ -1649,6 +1831,18 @@ void processAsciiTokenBuffer() {
       Serial.println("[EVENT] lengthstart accepted");
     } else {
       Serial.println("[EVENT] lengthstart ignored");
+    }
+    tjcAsciiBuf = "";
+    return;
+  }
+
+  if (tjcAsciiBuf.endsWith("poestart")) {
+    if (!poeBusy && (now - lastPoeStartEventMs >= START_DEBOUNCE_MS)) {
+      poeStartFlag = true;
+      lastPoeStartEventMs = now;
+      Serial.println("[EVENT] poestart accepted");
+    } else {
+      Serial.println("[EVENT] poestart ignored");
     }
     tjcAsciiBuf = "";
     return;
@@ -1746,6 +1940,9 @@ void setup() {
   clearResults();
 
   pinMode(PIN_TYPE_SENSE, INPUT_PULLUP);
+  pinMode(PIN_POE_ADC_A, INPUT);
+  analogReadResolution(12);
+  analogSetPinAttenuation(PIN_POE_ADC_A, ADC_11db);
 
   delay(300);
   tjcSetBkcmdOff();
@@ -1763,32 +1960,37 @@ void loop() {
   checkTjcEvent();
 
   // 页面进入事件
-  if (wireEnterFlag && !wireBusy && !dcrBusy && !typeBusy && !shortBusy && !lengthBusy) {
+  if (wireEnterFlag && !wireBusy && !dcrBusy && !typeBusy && !shortBusy && !lengthBusy && !poeBusy) {
     wireEnterFlag = false;
     enterWirePage();
   }
 
-  if (dcrEnterFlag && !wireBusy && !dcrBusy && !typeBusy && !shortBusy && !lengthBusy) {
+  if (dcrEnterFlag && !wireBusy && !dcrBusy && !typeBusy && !shortBusy && !lengthBusy && !poeBusy) {
     dcrEnterFlag = false;
     enterDcrPage();
   }
 
-  if (typeEnterFlag && !wireBusy && !dcrBusy && !typeBusy && !shortBusy && !lengthBusy) {
+  if (typeEnterFlag && !wireBusy && !dcrBusy && !typeBusy && !shortBusy && !lengthBusy && !poeBusy) {
     typeEnterFlag = false;
     enterTypePage();
   }
 
-  if (shortEnterFlag && !wireBusy && !dcrBusy && !typeBusy && !shortBusy && !lengthBusy) {
+  if (shortEnterFlag && !wireBusy && !dcrBusy && !typeBusy && !shortBusy && !lengthBusy && !poeBusy) {
     shortEnterFlag = false;
     enterShortPage();
   }
 
-  if (lengthEnterFlag && !wireBusy && !dcrBusy && !typeBusy && !shortBusy && !lengthBusy) {
+  if (lengthEnterFlag && !wireBusy && !dcrBusy && !typeBusy && !shortBusy && !lengthBusy && !poeBusy) {
     lengthEnterFlag = false;
     enterLengthPage();
   }
 
-  if (backFlag && !wireBusy && !dcrBusy && !typeBusy && !shortBusy && !lengthBusy) {
+  if (poeEnterFlag && !wireBusy && !dcrBusy && !typeBusy && !shortBusy && !lengthBusy && !poeBusy) {
+    poeEnterFlag = false;
+    enterPoePage();
+  }
+
+  if (backFlag && !wireBusy && !dcrBusy && !typeBusy && !shortBusy && !lengthBusy && !poeBusy) {
     backFlag = false;
     mainPageReset();
   }
@@ -1812,6 +2014,10 @@ void loop() {
 
   if (lengthStartFlag && !lengthBusy) {
     runLengthTest();
+  }
+
+  if (poeStartFlag && !poeBusy) {
+    runPoeTest();
   }
 
   delay(5);
