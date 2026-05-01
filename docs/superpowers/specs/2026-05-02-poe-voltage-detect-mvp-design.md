@@ -107,24 +107,54 @@ R_TOP 总功耗约 57^2 / 1.076M = 3.0 mW
 
 ## 5. ESP32 引脚
 
-第一版只需要两路 ADC：
+根据当前文件夹里的 `AD8310方案.md`、`SDR方案.md` 和 0502 阶段总结，GPIO2 和 GPIO13 不能再直接写成 PoE 默认脚：
 
 ```text
-PIN_POE_ADC_A = GPIO2
-PIN_POE_ADC_B = GPIO13
+GPIO2  = 旧 AD8310 TPVout ADC
+GPIO13 = 旧 AD9959 SCK
+GPIO14 = 旧 AD9959 SD0
+GPIO15 = 旧 AD9959 CS
+GPIO16 = 旧 AD9959 UP / IO_UPDATE
+GPIO21 = 旧 AD9959 RST
 ```
 
-选择依据：
+主程序当前没有使用 GPIO13，但如果旧 AD9959 排线还接在板子上，GPIO13/14/15/16/21 都应视为硬件占用。PoE 接线时应优先避开这些旧实验线，除非已经明确拆线并记录。
 
-- GPIO2 原为旧 AD8310 诊断 ADC，0502 总结已明确 AD8310 不再作为长度主线。
-- GPIO13 当前未被主程序使用。
-- 不占用 Wire Map 的 GPIO4/5/6/8/9/7/10/11。
-- 不占用 TJC UART GPIO17/GPIO18。
-- 不占用 SDR UART GPIO39/GPIO40。
-- 不占用 DCR ADC GPIO1。
-- 不占用 Type Sense GPIO12。
+当前固定占用：
 
-若实际板子上 GPIO13 不方便焊接，可替换为 GPIO14 或 GPIO15，但需要在代码常量里集中修改。
+```text
+Wire Map: GPIO4, GPIO5, GPIO6, GPIO8, GPIO9, GPIO7, GPIO10, GPIO11
+TJC UART: GPIO18, GPIO17
+SDR UART fallback: GPIO39, GPIO40
+Type sense: GPIO12
+DCR ADC: GPIO1
+旧 AD8310 ADC: GPIO2
+旧 AD9959 control: GPIO13, GPIO14, GPIO15, GPIO16, GPIO21
+```
+
+因此 PoE MVP 分两档推进。
+
+第一档，内部 ADC 最小验证，只做 Mode A：
+
+```text
+PIN_POE_ADC_A = GPIO3
+PIN_POE_ADC_B = not connected
+```
+
+GPIO3 在当前主程序和阶段文档中未被占用，适合先验证分压、二极管整流和电压换算。该档只能显示 `NO_POE / MODE_A / UNKNOWN`，不完整覆盖 Mode B。
+
+第二档，完整 A/B 检测，推荐加外置 ADC：
+
+```text
+ADS1115 A0 = Mode A 分压点
+ADS1115 A1 = Mode B 分压点
+ADS1115 SDA = GPIO35
+ADS1115 SCL = GPIO36
+ADS1115 VDD = 3V3
+ADS1115 GND = ESP32 GND
+```
+
+GPIO35/GPIO36 当前不在项目文档和主程序占用表里。使用 ADS1115 后，PoE A/B 两路不再消耗 ESP32 内部 ADC 脚，也能避开旧 AD8310/AD9959 线。若没有 ADS1115，又必须做完整 A/B，则需要先物理拆除旧 AD9959 排线，再在 `GPIO14/15/16` 中选一个作为 `PIN_POE_ADC_B`，但这不是推荐默认方案。
 
 ## 6. 电压换算
 
@@ -296,15 +326,23 @@ poe_voltage_detect_diag/poe_voltage_detect_diag.ino
 POE_DIAG,ms=<time>,adcA=<v>,adcB=<v>,VA=<v>,VB=<v>,mode=<mode>,status=<status>
 ```
 
-验收顺序：
+内部 ADC / GPIO3 第一档验收顺序：
+
+```text
+1. 不接输入：VA 接近 0 V，VB 显示 N/A，status=NO_POE
+2. 限流电源 12 V 接 Mode A：VA 显示约 12 V，status=UNSAFE
+3. 限流电源 48 V 接 Mode A：VA 显示约 48 V，mode=A，status=OK
+4. 限流电源 57 V 接 Mode A：GPIO3 前端 ADC 点不超过 3.3 V，mode=A，status=OK
+5. 模拟超过 60 V 前先断开 ESP32，只用万用表确认 ADC 点不会超过 3.3 V
+```
+
+ADS1115 第二档验收顺序：
 
 ```text
 1. 不接输入：VA/VB 接近 0 V，status=NO_POE
-2. 限流电源 12 V 接 Mode A：VA 显示约 12 V，status=UNSAFE
-3. 限流电源 48 V 接 Mode A：VA 显示约 48 V，mode=A，status=OK
-4. 限流电源 48 V 接 Mode B：VB 显示约 48 V，mode=B，status=OK
-5. 限流电源 57 V 接 Mode A：ADC_A 不超过 3.3 V，mode=A，status=OK
-6. 模拟超过 60 V 前先断开 ESP32，只用万用表确认 ADC 点不会超过 3.3 V
+2. 限流电源 48 V 接 Mode A：VA 显示约 48 V，mode=A，status=OK
+3. 限流电源 48 V 接 Mode B：VB 显示约 48 V，mode=B，status=OK
+4. A/B 同时输入 48 V：mode=A+B，status=OK
 ```
 
 ## 11. 主程序验收
@@ -316,9 +354,10 @@ POE_DIAG,ms=<time>,adcA=<v>,adcB=<v>,VA=<v>,VB=<v>,mode=<mode>,status=<status>
 2. p_poe 页面按 Start，发送 poestart，页面显示 TESTING。
 3. 不接 PoE：显示 PoE=NO，MODE=UNKNOWN，STATUS=NO_POE。
 4. Mode A 输入 48 V：显示 PoE=YES，MODE=A，VA 约 48 V。
-5. Mode B 输入 48 V：显示 PoE=YES，MODE=B，VB 约 48 V。
-6. 同时给 A/B 输入：显示 MODE=A+B。
-7. 其他页面 Wire/DCR/Type/Short/Length 仍可进入，事件不互相抢占。
+5. 若只完成 GPIO3 内部 ADC 第一档，VB 显示 N/A，Mode B 相关验收暂缓。
+6. 若完成 ADS1115 第二档，Mode B 输入 48 V：显示 PoE=YES，MODE=B，VB 约 48 V。
+7. 若完成 ADS1115 第二档，同时给 A/B 输入：显示 MODE=A+B。
+8. 其他页面 Wire/DCR/Type/Short/Length 仍可进入，事件不互相抢占。
 ```
 
 ## 12. 后续阶段
