@@ -1,0 +1,21 @@
+# Local credentials and machine-specific config
+ethernet_tester1/wifi_config.h
+
+# IDE/project-local state
+.idea/
+.claude/
+
+# Python cache and virtual environments
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.venv/
+venv/
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
+*.tmp
+*.bak
+*.swp

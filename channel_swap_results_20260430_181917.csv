@@ -1,0 +1,7 @@
+stage,run,tau_ns,signed_length_m,length_m,valid_tones,min_dut_amp_db,min_ref_amp_db,residual_deg_rms,verdict
+sma_a_dut_b_ref,1,0.285382,0.056467,0.056467,55,-4.78,-4.72,0.165,OK
+sma_a_dut_b_ref,2,0.305792,0.060505,0.060505,55,-4.75,-4.75,0.148,OK
+sma_a_dut_b_ref,3,0.272492,0.053916,0.053916,55,-4.78,-4.74,0.143,OK
+sma_b_dut_a_ref,1,0.264962,0.052426,0.052426,55,-4.93,-4.63,0.155,OK
+sma_b_dut_a_ref,2,0.274792,0.054371,0.054371,55,-4.89,-4.60,0.150,OK
+sma_b_dut_a_ref,3,0.262269,0.051893,0.051893,55,-4.89,-4.62,0.154,OK
